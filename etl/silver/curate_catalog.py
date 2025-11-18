@@ -1,23 +1,25 @@
-from pyspark.sql import SparkSession, functions as F
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from pyspark.sql import functions as F
+import sys
 
-# ---- CONFIG ----
-BRONZE_PATH = "s3://store-ops-dev-bronze/bestbuy/catalog/"   
-SILVER_PATH = "s3://store-ops-dev-silver/silver_products/"   
+# ---- CONFIG (edit if needed) ----
+BRONZE_PATH = "s3://store-ops-dev-bronze/bestbuy/catalog/"
+SILVER_PATH = "s3://store-ops-dev-silver/silver_products/"
 APP_NAME = "CurateBestBuyCatalog"
-# -----------------
+# ---------------------------------
 
-def build_spark():
-    spark = (SparkSession.builder.appName(APP_NAME).getOrCreate())
-    return spark
 
 def curate_catalog(spark):
-    # 1) Read raw Bronze JSONL
+    # 1) Read raw Bronze JSON
     df_raw = (
         spark.read
-        .json(f"{BRONZE_PATH}*/")   # bestbuy/catalog/dt=YYYY-MM-DD/*.jsonl
+        .json(f"{BRONZE_PATH}*/")   # dt=YYYY-MM-DD/*.jsonl
     )
 
-    # 2) Extract department, category, subcategory from categoryPath
+    # 2) Flatten categoryPath
     df = (
         df_raw
         .withColumn("department", F.col("categoryPath").getItem(0)["name"])
@@ -25,7 +27,7 @@ def curate_catalog(spark):
         .withColumn("subcategory", F.col("categoryPath").getItem(2)["name"])
     )
 
-    # 3) Clean core fields + add discount_pct + ingestion_date
+    # 3) Clean + enrich
     df_curated = (
         df
         .select(
@@ -49,8 +51,20 @@ def curate_catalog(spark):
     return df_curated
 
 
-def write_silver(df_curated):
-    # For now: write curated data as Parquet, partitioned by ingestion_date
+def main():
+    args = getResolvedOptions(sys.argv, ["JOB_NAME"])
+
+    sc = SparkContext()
+    glueContext = GlueContext(sc)
+    spark = glueContext.spark_session
+    spark.sparkContext.setLogLevel("WARN")
+
+    job = Job(glueContext)
+    job.init(args["JOB_NAME"], args)
+
+    df_curated = curate_catalog(spark)
+    print(f"Curated count: {df_curated.count()}")
+
     (
         df_curated
         .repartition("ingestion_date")
@@ -61,13 +75,9 @@ def write_silver(df_curated):
         .save(SILVER_PATH)
     )
 
-
-def main():
-    spark = build_spark()
-    df_curated = curate_catalog(spark)
-    print(f"Curated count: {df_curated.count()}")
-    write_silver(df_curated)
     print(f"✅ Silver written to {SILVER_PATH}")
+
+    job.commit()
 
 
 if __name__ == "__main__":
