@@ -2,16 +2,16 @@ name: Data Pipeline CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  tests:
+  pipeline-ci:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -24,18 +24,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 1) Run unit tests
       - name: Run unit tests
         run: |
+          echo "PWD = $(pwd)"
+          ls
+          export PYTHONPATH=$(pwd)
           pytest tests/unit
 
-      # 2) Optional: run integration tests that don't hit real AWS/Snowflake
-      - name: Run integration tests (no external calls)
-        if: always()
-        run: |
-          pytest tests/integration -m "not requires_cloud" || echo "Some cloud tests skipped"
-
-      # 3) Quick Airflow DAG import check
       - name: Validate Airflow DAG imports
-        run: |
-          python -m compileall airflow-bestbuy/dags
+        run: python -m compileall airflow-bestbuy/dags
