@@ -8,3 +8,4 @@ pyspark
 snowflake-connector-python
 # snowflake-sqlalchemy
 sqlalchemy
+apache-airflow==2.9.2 --constraint https://raw.githubusercontent.com/apache/airflow/constraints-2.9.2/constraints-3.8.txt

@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 
 airflow-bestbuy/logs/
+airflow_bestbuy/logs/
+
 airflow.cfg
 webserver_config.py
 *.log

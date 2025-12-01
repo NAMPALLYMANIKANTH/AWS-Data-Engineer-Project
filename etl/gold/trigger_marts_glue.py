@@ -2,7 +2,7 @@ import boto3
 import os
 from etl.utils.sns_alerts import notify_etl_success, notify_etl_failure
 
-GLUE_JOB_NAME = os.getenv("MARTS_GLUE_JOB_NAME", "marts_store_ops.py")
+GLUE_JOB_NAME = os.getenv("MARTS_GLUE_JOB_NAME", "marts_store_ops")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
 
 def main():

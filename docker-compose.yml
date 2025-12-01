@@ -27,15 +27,14 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      # So Python can see your project at /opt/airflow
+      # let Python see your whole project (etl, sql, etc.)
       PYTHONPATH: /opt/airflow
     volumes:
-      # Mount entire project so /opt/airflow/etl exists
+      # mount entire repo at /opt/airflow
       - ./:/opt/airflow
-      # Mount DAGs folder to standard Airflow DAsGs path
-      - ./airflow-bestbuy/dags:/opt/airflow/dags
-      # Logs folder for Airflow logs
-      - ./airflow-bestbuy/logs:/opt/airflow/logs
+      # Airflow DAGs + Logs
+      - ./airflow_bestbuy/dags:/opt/airflow/dags
+      - ./airflow_bestbuy/logs:/opt/airflow/logs
     ports:
       - "8080:8080"
     command: webserver
@@ -55,8 +54,8 @@ services:
       PYTHONPATH: /opt/airflow
     volumes:
       - ./:/opt/airflow
-      - ./airflow-bestbuy/dags:/opt/airflow/dags
-      - ./airflow-bestbuy/logs:/opt/airflow/logs
+      - ./airflow_bestbuy/dags:/opt/airflow/dags
+      - ./airflow_bestbuy/logs:/opt/airflow/logs
     command: scheduler
     networks:
       - airflow

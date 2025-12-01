@@ -2,12 +2,10 @@ import boto3
 import json
 import requests
 import datetime as dt
-from typing import List, Dict
-
+from typing import List, Dict, Tuple, Optional
 
 from etl.utils.secret_manager import get_bestbuy_api_key
-
-# api_key = get_bestbuy_api_key()
+from etl.utils.sns_alerts import notify_etl_failure, notify_etl_success
 
 BRONZE_BUCKET = "store-ops-dev-bronze"   # your bucket name
 BRONZE_PREFIX = "bestbuy/catalog"        # logical folder under bucket
@@ -73,7 +71,6 @@ def fetch_all_products(api_key: str, max_pages: int = MAX_PAGES) -> List[Dict]:
     return products
 
 
-
 def build_s3_key(prefix: str) -> str:
     """
     Build an S3 key with date partition, e.g.
@@ -107,7 +104,12 @@ def upload_to_s3_jsonl(records: List[Dict], bucket: str, prefix: str) -> str:
     return key
 
 
-def main():
+def main() -> Tuple[int, Optional[str]]:
+    """
+    Core Bronze BestBuy ingestion logic.
+    Returns:
+        (total_products, s3_key or None if nothing uploaded)
+    """
     print("Getting BestBuy API key from Secrets Manager...")
     api_key = get_bestbuy_api_key()
     print("API key retrieved ✅")
@@ -117,12 +119,43 @@ def main():
 
     if not products:
         print("No products returned, exiting.")
-        return
+        return 0, None
 
     print("Uploading data to S3 Bronze...")
     key = upload_to_s3_jsonl(products, BRONZE_BUCKET, BRONZE_PREFIX)
     print(f"Upload complete ✅ s3://{BRONZE_BUCKET}/{key}")
 
+    return len(products), key
+
+
+def run_bronze_bestbuy_ingest() -> None:
+    """
+    Wrapper used by Airflow (and CLI) that:
+      - runs the Bronze ingest
+      - sends SNS notifications for success/failure
+    """
+    job_name = "bronze_bestbuy_ingest"
+
+    try:
+        total, s3_key = main()
+
+        if total == 0:
+            details = "Pipeline ran successfully but BestBuy API returned 0 products."
+        else:
+            today = dt.date.today().strftime("%Y-%m-%d")
+            details = (
+                f"Bronze BestBuy ingest for {today} completed.\n"
+                f"Fetched {total} products and uploaded to "
+                f"s3://{BRONZE_BUCKET}/{s3_key}"
+            )
+
+        notify_etl_success(job_name, details)
+
+    except Exception as e:
+        notify_etl_failure(job_name, e)
+        raise
+
 
 if __name__ == "__main__":
-    main()
+    # CLI entrypoint → same behavior as Airflow
+    run_bronze_bestbuy_ingest()
